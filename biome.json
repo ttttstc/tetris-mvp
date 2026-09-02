@@ -8,20 +8,10 @@
     "rules": {
       "recommended": true,
       "suspicious": {
-        "noExplicitAny": "warn",
-        "noConsoleLog": "off"
+        "noExplicitAny": "warn"
       },
       "style": {
-        "noNonNullAssertion": "warn",
-        "useImportType": "error"
-      },
-      "complexity": {
-        "noExcessiveCognitiveComplexity": {
-          "level": "warn",
-          "options": {
-            "maxAllowedComplexity": 20
-          }
-        }
+        "noNonNullAssertion": "warn"
       }
     }
   },

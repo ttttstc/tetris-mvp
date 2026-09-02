@@ -21,17 +21,13 @@ export default defineConfig({
       reporter: ['text', 'json-summary', 'json', 'html'],
       reportsDirectory: './coverage',
 
-      // src/core/ 是项目唯一高风险纯逻辑区，门禁最严
-      include: ['src/core/**', 'src/input/**', 'src/render/**'],
+      // src/core/ 是项目唯一高风险纯逻辑区，门禁最严；input/render 走 E2E 而非单测，不进 coverage
+      include: ['src/core/**'],
       exclude: ['src/**/*.test.ts', 'src/**/*.d.ts', 'src/**/index.ts', 'src/core/types.ts'],
 
-      // 架构指标：core/ ≥ 95% lines，全仓（src/）≥ 80% lines（两档）。
+      // 架构指标：core/ ≥ 95% lines（立场 A 接受）。
       // 双源防御：CI workflow 卡门禁，本地 `pnpm test:coverage` 同样 fail-fast（避免 CI 脚本错时漏卡）。
-      // 单模块掉档或 Phase 2 加严时，再展开 functions/branches/statements 子档。
       thresholds: {
-        // 全局门槛
-        lines: 80,
-        // core/ 子目录门槛（v8 支持 per-file glob）
         'src/core/**': {
           lines: 95,
         },

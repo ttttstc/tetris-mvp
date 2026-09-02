@@ -15,7 +15,7 @@
     "resolveJsonModule": true,
     "allowSyntheticDefaultImports": true,
     "verbatimModuleSyntax": false,
-    "types": ["svelte", "vitest/globals"],
+    "types": ["svelte", "vitest/globals", "node"],
     "baseUrl": ".",
     "paths": {
       "$core/*": ["src/core/*"],
@@ -23,9 +23,12 @@
       "$input/*": ["src/input/*"],
       "$ui/*": ["src/ui/*"],
       "$extensions/*": ["src/extensions/*"],
-      "$app/*": ["src/app/*"]
+      "$app/*": ["src/app/*"],
+      "@core/*": ["src/core/*"],
+      "@input/*": ["src/input/*"],
+      "@render/*": ["src/render/*"]
     }
   },
-  "include": ["src/**/*.ts", "src/**/*.svelte", "scripts/**/*.ts", "test/**/*.ts"],
+  "include": ["src/**/*.ts", "src/**/*.svelte", "scripts/**/*.ts", "test/**/*.ts", "*.ts", "*.config.ts"],
   "exclude": ["node_modules", "dist"]
 }
