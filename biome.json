@@ -14,10 +14,15 @@
         "noNonNullAssertion": "warn",
         "useImportType": "off",
         "useExportType": "off",
-        "useConst": "off"
+        "useConst": "off",
+        "noInferrableTypes": "off"
       },
       "correctness": {
         "noUnusedVariables": "warn"
+      },
+      "suspicious": {
+        "noExplicitAny": "warn",
+        "noExportsInTest": "off"
       }
     }
   },
