@@ -13,7 +13,8 @@
       "style": {
         "noNonNullAssertion": "warn",
         "useImportType": "off",
-        "useExportType": "off"
+        "useExportType": "off",
+        "useConst": "off"
       },
       "correctness": {
         "noUnusedVariables": "warn"
