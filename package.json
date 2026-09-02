@@ -1,0 +1,44 @@
+{
+  "name": "tetris-mvp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Tetris Web SPA MVP — classic single-player with SRS, Hold, 7-bag, score/level. Pure-front-end, statically hosted.",
+  "engines": {
+    "node": ">=20.10.0",
+    "pnpm": ">=9.0.0"
+  },
+  "packageManager": "pnpm@9.0.0",
+  "scripts": {
+    "dev": "vite",
+    "build": "svelte-check --tsconfig ./tsconfig.json && vite build",
+    "preview": "vite preview --port 4173",
+    "check": "svelte-check --tsconfig ./tsconfig.json",
+    "demo:core": "tsx scripts/demo-core.ts",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "format": "biome format --write .",
+    "type-check": "svelte-check --tsconfig ./tsconfig.json && tsc --noEmit",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:e2e:install": "playwright install --with-deps chromium",
+    "test:e2e": "playwright test",
+    "ci": "pnpm lint && pnpm type-check && pnpm test:coverage && pnpm build"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "1.8.3",
+    "@playwright/test": "1.44.0",
+    "@sveltejs/vite-plugin-svelte": "3.1.0",
+    "@types/node": "20.12.7",
+    "@vitest/coverage-v8": "1.6.0",
+    "happy-dom": "14.12.0",
+    "svelte": "5.0.0",
+    "svelte-check": "3.8.0",
+    "tsx": "4.16.0",
+    "typescript": "5.4.5",
+    "vite": "5.2.11",
+    "vitest": "1.6.0"
+  }
+}

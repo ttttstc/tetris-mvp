@@ -1,0 +1,24 @@
+# 静态资源（Vite 自动 hash 文件名）→ 永久缓存
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# Service Worker（若启用）→ 实时校验
+/sw.js
+  Cache-Control: public, max-age=0, must-revalidate
+
+# 字体 / 图标（Vite hash 后稳定）
+/fonts/*
+  Cache-Control: public, max-age=31536000, immutable
+/icons/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# HTML → 短缓存，保证新版本可达
+/*.html
+  Cache-Control: public, max-age=300, must-revalidate
+
+# 全站安全头（SAMEORIGIN 允许 iframe 嵌入 GitHub Pages 同域预览）
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: SAMEORIGIN
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=()
