@@ -6,9 +6,9 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { gameReducer, initialState, SPAWN_POSITION } from './gameMachine';
-import { BOARD_WIDTH, VISIBLE_TOP } from './types';
-import { createBoard, setCell } from './board';
+import { gameReducer, initialState, snapshotBoard, SPAWN_POSITION } from './gameMachine';
+import { BOARD_WIDTH, TOTAL_ROWS, VISIBLE_BOTTOM, VISIBLE_TOP } from './types';
+import { setCell } from './board';
 
 describe('gameReducer — basic transitions', () => {
   it('starts in idle', () => {
@@ -168,5 +168,192 @@ describe('gameReducer — determinism', () => {
   });
 });
 
-// Re-export createBoard to satisfy unused-import linter when tree-shaken.
-export const _createBoardRef = createBoard;
+describe('gameReducer — spawn-collision + lockout (gameMachine.ts:457-467, 505-508)', () => {
+  /** Fill rows [fromRow, toRow) across all columns. */
+  function fillRows(s: ReturnType<typeof gameReducer>, fromRow: number, toRow: number): void {
+    if (s.phase !== 'playing') return;
+    for (let y = fromRow; y < toRow; y++) {
+      for (let x = 0; x < BOARD_WIDTH; x++) {
+        setCell(s.board, x, y, 1);
+      }
+    }
+  }
+
+  /**
+   * 1) Hold-swap spawn-collision → boardTopOut → gameOver.
+   *
+   * Architect-named high-risk data source: the lockout / spawn-collision branch.
+   * Forces the swap path (m.hold !== null) at gameMachine.ts:457-466. The held
+   * piece is placed at (SPAWN_X=4, SPAWN_Y=1) rot 0; with rows 0..VISIBLE_TOP+1
+   * filled, every piece shape's rot-0 cells (y=0,1 or y=1,2) overlap an
+   * occupied cell → collides() → gameOver.
+   */
+  it('hold swap → gameOver when swapped piece collides at spawn (lockout)', () => {
+    let s = gameReducer(initialState(), { type: 'start', seed: 1 });
+    if (s.phase !== 'playing') throw new Error('expected playing after start');
+
+    // First hold: m.hold === null branch — piece goes into hold, spawnNext runs.
+    s = gameReducer(s, { type: 'hold' });
+    if (s.phase !== 'playing') throw new Error('expected playing after first hold');
+
+    // hardDrop locks the active piece, spawnNext resets holdUsedThisTurn=false.
+    s = gameReducer(s, { type: 'hardDrop' });
+    if (s.phase !== 'playing') throw new Error('expected playing after hardDrop');
+
+    // Block the entire spawn column range: rows 0..VISIBLE_TOP+1 cover all 7 piece
+    // shapes' rot-0 cells (y∈{0,1,2} at minimum). Any piece at SPAWN_Y=1 rot=0 collides.
+    fillRows(s, 0, VISIBLE_TOP + 2);
+
+    // Second hold: m.hold !== null → swap branch. Active is set to the held piece;
+    // its cells overlap the filled area → gameOver (line 464-466).
+    s = gameReducer(s, { type: 'hold' });
+
+    expect(s.phase).toBe('gameOver');
+  });
+
+  /**
+   * 2) Hold-swap success path (m.hold !== null, no collision) → still playing.
+   *
+   * Covers lines 457-463 + 467-469 (the else branch that doesn't take the
+   * collides early-return). After the swap, holdUsedThisTurn must be true.
+   */
+  it('hold swap succeeds (no collision) → continues playing', () => {
+    let s = gameReducer(initialState(), { type: 'start', seed: 1 });
+    if (s.phase !== 'playing') throw new Error('expected playing after start');
+
+    s = gameReducer(s, { type: 'hold' });
+    if (s.phase !== 'playing') throw new Error('expected playing after first hold');
+    const originalHold = s.hold;
+
+    s = gameReducer(s, { type: 'hardDrop' });
+    if (s.phase !== 'playing') throw new Error('expected playing after hardDrop');
+
+    // No fillRows — spawn area is empty, swap succeeds.
+    s = gameReducer(s, { type: 'hold' });
+
+    if (s.phase !== 'playing') {
+      throw new Error(`expected playing after successful swap, got ${s.phase}`);
+    }
+    // m.hold should now hold the post-hardDrop piece id, not the originally-held one.
+    expect(s.hold).not.toBe(originalHold);
+    expect(s.holdUsedThisTurn).toBe(true);
+  });
+
+  /**
+   * 3) snapshotBoard on `playing` returns a clone of the live board (line 505).
+   *
+   * Cloning is required — callers (replay / E2E) must not be able to mutate
+   * game state through the snapshot.
+   */
+  it('snapshotBoard on playing → returns cloned board', () => {
+    let s = gameReducer(initialState(), { type: 'start', seed: 1 });
+    if (s.phase !== 'playing') throw new Error('expected playing');
+
+    const snap = snapshotBoard(s);
+    expect(snap).not.toBeNull();
+    expect(snap).toBeInstanceOf(Uint8Array);
+    expect(snap!.length).toBe(BOARD_WIDTH * TOTAL_ROWS);
+
+    // Mutating the snapshot must not leak into the live board.
+    snap![0] = 7;
+    expect(s.board[0]).toBe(0);
+  });
+
+  /**
+   * 4) snapshotBoard on `paused` returns a clone of the snapshotted board (line 506).
+   *
+   * Paused state holds its data in `snapshot`, not at the top level — the helper
+   * must reach into the right place.
+   */
+  it('snapshotBoard on paused → returns cloned snapshot board', () => {
+    let s = gameReducer(initialState(), { type: 'start', seed: 1 });
+    s = gameReducer(s, { type: 'pause' });
+    expect(s.phase).toBe('paused');
+
+    const snap = snapshotBoard(s);
+    expect(snap).not.toBeNull();
+    expect(snap!.length).toBe(BOARD_WIDTH * TOTAL_ROWS);
+  });
+
+  /**
+   * 5) snapshotBoard on idle / gameOver returns null (line 507 fallback).
+   *
+   * No board to snapshot outside of active gameplay.
+   */
+  it('snapshotBoard on idle and gameOver → returns null', () => {
+    expect(snapshotBoard(initialState())).toBeNull();
+
+    // Force a gameOver by repeatedly hard-dropping into a blocked top.
+    let s = gameReducer(initialState(), { type: 'start', seed: 1 });
+    for (let i = 0; i < 5; i++) {
+      if (s.phase !== 'playing') break;
+      fillRows(s, 0, VISIBLE_TOP + 2);
+      s = gameReducer(s, { type: 'hardDrop' });
+    }
+    if (s.phase === 'gameOver') {
+      expect(snapshotBoard(s)).toBeNull();
+    }
+  });
+});
+
+describe('gameReducer — lock-reset on move while grounded', () => {
+  /**
+   * Fill the bottom 3 rows so the piece is GUARANTEED grounded
+   * (tryMove(0, 1) collides) regardless of horizontal position. Used to
+   * deterministically drive gameMachine.ts:402-405 (move lock reset path).
+   *
+   * Note: we deliberately do NOT add a rotate-while-grounded test here.
+   * SRS kick offsets can shift the rotated piece up by 2 rows, which means
+   * a successful rotation no longer satisfies isGrounded() afterwards —
+   * the lock-reset branch legitimately doesn't fire in that case, so any
+   * test asserting "rotate always resets" would be wrong. The translate
+   * case is the deterministic companion for the same code branch.
+   */
+  function fillBottomBufferFor(s: ReturnType<typeof gameReducer>): void {
+    if (s.phase !== 'playing') return;
+    for (let y = VISIBLE_BOTTOM - 1; y <= VISIBLE_BOTTOM + 1; y++) {
+      for (let x = 0; x < BOARD_WIDTH; x++) {
+        setCell(s.board, x, y, 1); // rows 21, 22, 23 — last visible + both bottom buffers
+      }
+    }
+  }
+
+  /**
+   * 6) move while grounded → lock reset (gameMachine.ts:402-405).
+   *
+   * The piece is grounded (rows 21–23 filled). A horizontal move keeps it
+   * grounded and triggers the lock-delay reset: lockTimerMs back to 0,
+   * lockResetsLeft--.
+   */
+  it('move while grounded → resets lock timer + consumes one lock reset', () => {
+    let s = gameReducer(initialState(), { type: 'start', seed: 1 });
+    if (s.phase !== 'playing') throw new Error('expected playing after start');
+
+    fillBottomBufferFor(s);
+
+    // Drop the piece to the floor via softDrop. Inlined (vs. helper) to satisfy
+    // Biome's noParameterAssign rule.
+    for (let i = 0; i < 25; i++) {
+      const next = gameReducer(s, { type: 'softDrop' });
+      s = next;
+      if (s.phase !== 'playing') break;
+    }
+    if (s.phase !== 'playing') throw new Error('expected playing after softDrop');
+
+    // Tick once with dt < LOCK_DELAY_MS so lockTimerMs is non-zero before move.
+    const ticked = gameReducer(s, { type: 'tick', dtMs: 100 });
+    s = ticked;
+    if (s.phase !== 'playing') throw new Error('expected playing after tick');
+
+    const beforeResets = s.lockResetsLeft;
+    expect(s.lockTimerMs).toBe(100);
+
+    const moved = gameReducer(s, { type: 'move', dx: -1 });
+    s = moved;
+    if (s.phase !== 'playing') throw new Error('expected playing after move');
+
+    // Lock reset path fired: timer back to 0, counter decremented.
+    expect(s.lockTimerMs).toBe(0);
+    expect(s.lockResetsLeft).toBe(beforeResets - 1);
+  });
+});
